@@ -1,0 +1,11 @@
+# Dockerfile for local PostgreSQL database
+FROM postgres:16
+
+ENV POSTGRES_DB=smallauth
+ENV POSTGRES_USER=your_db_user
+ENV POSTGRES_PASSWORD=your_db_password
+
+EXPOSE 5432
+
+# Optionally, add migration/init scripts here
+# COPY ./migrations/*.sql /docker-entrypoint-initdb.d/
