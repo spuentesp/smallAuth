@@ -1,0 +1,28 @@
+# Go build
+/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Dependency directories
+vendor/
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+
+# Env files
+.env
+.env.*
+
+# Node modules (frontend)
+web/node_modules/
+
+# Build output
+web/dist/
+web/build/
