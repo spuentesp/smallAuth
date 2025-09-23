@@ -17,3 +17,10 @@ type User struct {
 	DeletedAt       gorm.DeletedAt `gorm:"index"`
 	Roles           []Role         `gorm:"many2many:user_roles;"`
 }
+
+type PasswordRecoveryToken struct {
+	ID        uint      `gorm:"primaryKey"`
+	UserID    uint      `gorm:"index;not null"`
+	Token     string    `gorm:"uniqueIndex;not null"`
+	ExpiresAt time.Time `gorm:"not null"`
+}

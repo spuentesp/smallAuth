@@ -25,6 +25,7 @@ type Config struct {
 	PasswordRequireLower bool
 	PasswordRequireDigit bool
 	PasswordRequireSymbol bool
+	PasswordRecoveryTokenTTL int // in seconds
 }
 
 // LoadConfig loads configuration from environment variables
@@ -48,6 +49,7 @@ func LoadConfig() *Config {
 		PasswordRequireLower: getEnvBool("PASSWORD_REQUIRE_LOWER", true),
 		PasswordRequireDigit: getEnvBool("PASSWORD_REQUIRE_DIGIT", true),
 		PasswordRequireSymbol: getEnvBool("PASSWORD_REQUIRE_SYMBOL", true),
+		PasswordRecoveryTokenTTL: getEnvInt("PASSWORD_RECOVERY_TOKEN_TTL", 86400), // default 24h
 	}
 }
 
