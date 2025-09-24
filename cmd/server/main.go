@@ -12,6 +12,12 @@ import (
 	"time"
 )
 
+// @title SmallAuth API
+// @version 1.0
+// @description Auth microservice with RBAC, password recovery, and security features
+// @host localhost:8080
+// @BasePath /
+
 func main() {
 	cfg := config.LoadConfig()
 	conn, err := db.ConnectDB(cfg)
@@ -19,6 +25,12 @@ func main() {
 		panic("failed to connect to database: " + err.Error())
 	}
 	fmt.Println("Database connected. smallAuth server starting...")
+
+	// Run DB migrations
+	if err := db.MigrateDB(conn); err != nil {
+		panic("failed to run migrations: " + err.Error())
+	}
+	fmt.Println("Database migrations complete.")
 
 	// Check DB connection
 	dbSQL, err := conn.DB()
