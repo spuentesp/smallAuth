@@ -1,11 +1,12 @@
 package auth
 
 import (
-	"golang.org/x/crypto/bcrypt"
-	"unicode"
 	"errors"
+	"unicode"
+
 	"github.com/example/smallauth/internal/config"
 	"github.com/example/smallauth/internal/models"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // HashPassword hashes a plaintext password using bcrypt
@@ -24,10 +25,10 @@ func CheckPasswordHash(password, hash string) bool {
 
 // PasswordStrengthConfig defines requirements for password validation
 type PasswordStrengthConfig struct {
-	MinLength    int
-	RequireUpper bool
-	RequireLower bool
-	RequireDigit bool
+	MinLength     int
+	RequireUpper  bool
+	RequireLower  bool
+	RequireDigit  bool
 	RequireSymbol bool
 }
 
@@ -70,10 +71,10 @@ func ChangeUserPassword(user *models.User, oldPassword, newPassword string, cfg 
 		return ErrInvalidOldPassword
 	}
 	strengthCfg := PasswordStrengthConfig{
-		MinLength:    cfg.PasswordMinLength,
-		RequireUpper: cfg.PasswordRequireUpper,
-		RequireLower: cfg.PasswordRequireLower,
-		RequireDigit: cfg.PasswordRequireDigit,
+		MinLength:     cfg.PasswordMinLength,
+		RequireUpper:  cfg.PasswordRequireUpper,
+		RequireLower:  cfg.PasswordRequireLower,
+		RequireDigit:  cfg.PasswordRequireDigit,
 		RequireSymbol: cfg.PasswordRequireSymbol,
 	}
 	if !ValidatePasswordStrength(newPassword, strengthCfg) {

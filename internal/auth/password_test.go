@@ -2,6 +2,7 @@ package auth
 
 import (
 	"testing"
+
 	"github.com/example/smallauth/internal/config"
 	"github.com/example/smallauth/internal/models"
 )
@@ -25,10 +26,10 @@ func TestHashPasswordAndCheckPasswordHash(t *testing.T) {
 
 func TestValidatePasswordStrength(t *testing.T) {
 	cfg := PasswordStrengthConfig{
-		MinLength:    8,
-		RequireUpper: true,
-		RequireLower: true,
-		RequireDigit: true,
+		MinLength:     8,
+		RequireUpper:  true,
+		RequireLower:  true,
+		RequireDigit:  true,
 		RequireSymbol: true,
 	}
 
@@ -56,17 +57,17 @@ func TestValidatePasswordStrength(t *testing.T) {
 
 func TestChangeUserPassword(t *testing.T) {
 	cfg := &PasswordStrengthConfig{
-		MinLength:    8,
-		RequireUpper: true,
-		RequireLower: true,
-		RequireDigit: true,
+		MinLength:     8,
+		RequireUpper:  true,
+		RequireLower:  true,
+		RequireDigit:  true,
 		RequireSymbol: true,
 	}
 	appCfg := &config.Config{
-		PasswordMinLength:    cfg.MinLength,
-		PasswordRequireUpper: cfg.RequireUpper,
-		PasswordRequireLower: cfg.RequireLower,
-		PasswordRequireDigit: cfg.RequireDigit,
+		PasswordMinLength:     cfg.MinLength,
+		PasswordRequireUpper:  cfg.RequireUpper,
+		PasswordRequireLower:  cfg.RequireLower,
+		PasswordRequireDigit:  cfg.RequireDigit,
 		PasswordRequireSymbol: cfg.RequireSymbol,
 	}
 	oldPassword := "Valid1!Password"

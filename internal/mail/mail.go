@@ -3,6 +3,7 @@ package mail
 import (
 	"fmt"
 	"net/smtp"
+
 	"github.com/example/smallauth/internal/config"
 )
 
@@ -10,6 +11,7 @@ import (
 // Allows for future extension (e.g., Brevo API)
 type Mailer interface {
 	Send(to, subject, body string) error
+	SendHTML(to, subject, htmlBody string) error
 }
 
 // SMTPMailer implements Mailer using SMTP relay

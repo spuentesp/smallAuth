@@ -2,13 +2,15 @@ package middleware
 
 import (
 	"net/http"
-	"time"
 	"sync"
-	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
+	"time"
+
 	"github.com/example/smallauth/internal/config"
 	"github.com/example/smallauth/internal/models"
 	"github.com/example/smallauth/internal/rbac"
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 )
 
@@ -19,9 +21,12 @@ var (
 	loginAttemptsMutex sync.Mutex
 )
 
+// Add a global logger
+var Logger = logrus.New()
+
 type attemptInfo struct {
-	Count      int
-	LastFailed time.Time
+	Count        int
+	LastFailed   time.Time
 	BlockedUntil time.Time
 }
 
@@ -97,11 +102,22 @@ func ResetLoginAttempts(ip string) {
 	loginAttemptsMutex.Unlock()
 }
 
+// Example usage in middleware
+func logRequest(c *gin.Context, status int, msg string) {
+	Logger.WithFields(logrus.Fields{
+		"method": c.Request.Method,
+		"path":   c.Request.URL.Path,
+		"ip":     c.ClientIP(),
+		"status": status,
+	}).Info(msg)
+}
+
 // AuthMiddleware validates JWT and loads user into context
 func AuthMiddleware(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenStr := c.GetHeader("Authorization")
 		if tokenStr == "" {
+			logRequest(c, http.StatusUnauthorized, "missing token")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
 			return
 		}
@@ -110,19 +126,23 @@ func AuthMiddleware(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 			return []byte(cfg.JWTSecret), nil
 		})
 		if err != nil {
+			logRequest(c, http.StatusUnauthorized, "invalid token")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			return
 		}
 		userID, ok := claims["sub"].(float64)
 		if !ok {
+			logRequest(c, http.StatusUnauthorized, "invalid token claims")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token claims"})
 			return
 		}
 		var user models.User
 		if err := db.Where("id = ?", uint(userID)).Preload("Roles.Permissions").First(&user).Error; err != nil {
+			logRequest(c, http.StatusUnauthorized, "user not found")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
 			return
 		}
+		logRequest(c, http.StatusOK, "user authenticated")
 		c.Set("user", &user)
 		c.Next()
 	}
