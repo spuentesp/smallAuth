@@ -2,12 +2,17 @@ package api
 
 import (
 	"net/http"
+	"time"
+
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
-	"github.com/example/smallauth/internal/models"
+
 	"github.com/example/smallauth/internal/auth"
 	"github.com/example/smallauth/internal/config"
 	"github.com/example/smallauth/internal/mail"
+	"github.com/example/smallauth/internal/middleware"
+	"github.com/example/smallauth/internal/models"
 )
 
 // RegisterUserRequest is the payload for registration
@@ -20,26 +25,42 @@ type RegisterUserRequest struct {
 	Password      string `json:"password" binding:"required"`
 }
 
+func logAPI(c *gin.Context, status int, msg string, fields logrus.Fields) {
+	allFields := logrus.Fields{
+		"method": c.Request.Method,
+		"path":   c.Request.URL.Path,
+		"ip":     c.ClientIP(),
+		"status": status,
+	}
+	for k, v := range fields {
+		allFields[k] = v
+	}
+	middleware.Logger.WithFields(allFields).Info(msg)
+}
+
 func RegisterUserHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req RegisterUserRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
+			logAPI(c, http.StatusBadRequest, "invalid registration request", logrus.Fields{"error": err.Error()})
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 			return
 		}
 		strengthCfg := auth.PasswordStrengthConfig{
-			MinLength:    cfg.PasswordMinLength,
-			RequireUpper: cfg.PasswordRequireUpper,
-			RequireLower: cfg.PasswordRequireLower,
-			RequireDigit: cfg.PasswordRequireDigit,
+			MinLength:     cfg.PasswordMinLength,
+			RequireUpper:  cfg.PasswordRequireUpper,
+			RequireLower:  cfg.PasswordRequireLower,
+			RequireDigit:  cfg.PasswordRequireDigit,
 			RequireSymbol: cfg.PasswordRequireSymbol,
 		}
 		if !auth.ValidatePasswordStrength(req.Password, strengthCfg) {
+			logAPI(c, http.StatusBadRequest, "weak password on registration", logrus.Fields{"username": req.Username})
 			c.JSON(http.StatusBadRequest, gin.H{"error": "password does not meet strength requirements"})
 			return
 		}
 		hash, err := auth.HashPassword(req.Password)
 		if err != nil {
+			logAPI(c, http.StatusInternalServerError, "failed to hash password", logrus.Fields{"username": req.Username, "error": err.Error()})
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
 			return
 		}
@@ -50,9 +71,11 @@ func RegisterUserHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 			PasswordHash:  hash,
 		}
 		if err := db.Create(user).Error; err != nil {
+			logAPI(c, http.StatusInternalServerError, "failed to create user", logrus.Fields{"username": req.Username, "error": err.Error()})
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
 			return
 		}
+		logAPI(c, http.StatusCreated, "user registered", logrus.Fields{"username": req.Username, "user_id": user.ID})
 		c.JSON(http.StatusCreated, gin.H{"message": "user registered"})
 	}
 }
@@ -67,20 +90,23 @@ func RecoverPasswordHandler(db *gorm.DB, cfg *config.Config, mailer mail.Mailer)
 	return func(c *gin.Context) {
 		var req RecoverPasswordRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
+			logAPI(c, http.StatusBadRequest, "invalid password recovery request", logrus.Fields{"error": err.Error()})
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 			return
 		}
 		var user models.User
 		if err := db.Where("email = ?", req.Email).First(&user).Error; err != nil {
-			// Always respond generically
+			logAPI(c, http.StatusOK, "password recovery requested for non-existent email", logrus.Fields{"email": req.Email})
 			c.JSON(http.StatusOK, gin.H{"message": "If the email exists, recovery instructions have been sent."})
 			return
 		}
 		err := auth.RecoverPassword(&user, mailer, cfg, db)
 		if err != nil {
+			logAPI(c, http.StatusInternalServerError, "failed to send recovery email", logrus.Fields{"user_id": user.ID, "error": err.Error()})
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send recovery email"})
 			return
 		}
+		logAPI(c, http.StatusOK, "password recovery email sent", logrus.Fields{"user_id": user.ID})
 		c.JSON(http.StatusOK, gin.H{"message": "If the email exists, recovery instructions have been sent."})
 	}
 }
@@ -112,36 +138,42 @@ func ChangePasswordHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user, exists := c.Get("user")
 		if !exists {
+			logAPI(c, http.StatusUnauthorized, "unauthorized password change", nil)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
 		userModel, ok := user.(*models.User)
 		if !ok {
+			logAPI(c, http.StatusInternalServerError, "invalid user type on password change", nil)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user type"})
 			return
 		}
 		var req ChangePasswordRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
+			logAPI(c, http.StatusBadRequest, "invalid password change request", logrus.Fields{"user_id": userModel.ID, "error": err.Error()})
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 			return
 		}
 		err := auth.ChangeUserPassword(userModel, req.OldPassword, req.NewPassword, cfg)
 		if err != nil {
+			logAPI(c, http.StatusBadRequest, "password change failed", logrus.Fields{"user_id": userModel.ID, "error": err.Error()})
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 		if err := db.Save(userModel).Error; err != nil {
+			logAPI(c, http.StatusInternalServerError, "failed to update password", logrus.Fields{"user_id": userModel.ID, "error": err.Error()})
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update password"})
 			return
 		}
+		logAPI(c, http.StatusOK, "password changed", logrus.Fields{"user_id": userModel.ID})
 		c.JSON(http.StatusOK, gin.H{"message": "password changed"})
 	}
 }
 
 // Update user data (auth required)
 type UpdateUserRequest struct {
-	Email         string `json:"email"`
-	RecoveryEmail string `json:"recovery_email"`
+	Email           string `json:"email"`
+	RecoveryEmail   string `json:"recovery_email"`
 	AutoRedirectURL string `json:"auto_redirect_url"`
 }
 
@@ -251,5 +283,12 @@ func ChangeUserRolesHandler(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"message": "user roles updated"})
+	}
+}
+
+// Health check endpoint
+func HealthHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "timestamp": time.Now().UTC()})
 	}
 }

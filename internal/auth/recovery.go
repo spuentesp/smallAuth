@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/example/smallauth/internal/models"
-	"github.com/example/smallauth/internal/mail"
 	"github.com/example/smallauth/internal/config"
+	"github.com/example/smallauth/internal/mail"
+	"github.com/example/smallauth/internal/models"
 	"gorm.io/gorm"
 )
 
