@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/example/smallauth/internal/api"
@@ -11,6 +13,7 @@ import (
 	"github.com/example/smallauth/internal/mail"
 	"github.com/example/smallauth/internal/middleware"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 // @title SmallAuth API
@@ -43,8 +46,22 @@ func main() {
 	}
 	fmt.Println("Database ping successful.")
 
-	// Setup Gin router
-	router := gin.Default()
+	// Set Gin to release mode for production
+	gin.SetMode(gin.ReleaseMode)
+
+	// Configure trusted proxies from env
+	trustedProxies := os.Getenv("GIN_TRUSTED_PROXIES")
+	var proxyList []string
+	if trustedProxies != "" {
+		proxyList = strings.Split(trustedProxies, ",")
+	} else {
+		proxyList = []string{"127.0.0.1"}
+	}
+	router := gin.New()
+	if err := router.SetTrustedProxies(proxyList); err != nil {
+		logrus.WithError(err).Fatal("Failed to set trusted proxies")
+	}
+
 	mailer := mail.NewSMTPMailer(cfg)
 
 	// Public endpoints with rate limiting
@@ -64,6 +81,7 @@ func main() {
 	})
 	router.POST("/token/validate", api.ValidateTokenHandler(cfg))
 	router.POST("/user/recover", api.RecoverPasswordHandler(conn, cfg, mailer))
+	router.GET("/health", api.HealthHandler())
 
 	// Authenticated endpoints
 	authMW := middleware.AuthMiddleware(cfg, conn)

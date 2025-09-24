@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"testing"
+
 	"github.com/example/smallauth/internal/models"
 )
 

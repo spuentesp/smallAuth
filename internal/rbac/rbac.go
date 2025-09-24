@@ -1,8 +1,8 @@
 package rbac
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/example/smallauth/internal/models"
+	"github.com/gin-gonic/gin"
 )
 
 // PermissionChecker defines the interface for checking user permissions

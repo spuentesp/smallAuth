@@ -2,13 +2,14 @@ package api
 
 import (
 	"net/http"
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
-	"github.com/example/smallauth/internal/models"
+	"time"
+
 	"github.com/example/smallauth/internal/auth"
 	"github.com/example/smallauth/internal/config"
+	"github.com/example/smallauth/internal/models"
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
-	"time"
+	"gorm.io/gorm"
 )
 
 type LoginRequest struct {
@@ -17,7 +18,7 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Token string `json:"token"`
+	Token       string `json:"token"`
 	RedirectURL string `json:"redirect_url,omitempty"`
 }
 
@@ -52,10 +53,10 @@ func LoginHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 
 func generateJWT(user *models.User, cfg *config.Config) (string, error) {
 	claims := jwt.MapClaims{
-		"sub": user.ID,
+		"sub":      user.ID,
 		"username": user.Username,
-		"email": user.Email,
-		"exp": time.Now().Add(24 * time.Hour).Unix(),
+		"email":    user.Email,
+		"exp":      time.Now().Add(24 * time.Hour).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(cfg.JWTSecret))
@@ -68,7 +69,7 @@ type ValidateTokenRequest struct {
 }
 
 type ValidateTokenResponse struct {
-	Valid bool `json:"valid"`
+	Valid  bool                   `json:"valid"`
 	Claims map[string]interface{} `json:"claims,omitempty"`
 }
 
