@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/example/smallauth/internal/config"
-	"github.com/example/smallauth/internal/db"
-	"github.com/gin-gonic/gin"
-	"github.com/example/smallauth/internal/api"
-	"github.com/example/smallauth/internal/mail"
-	"github.com/example/smallauth/internal/middleware"
 	"net/http"
 	"time"
+
+	"github.com/example/smallauth/internal/api"
+	"github.com/example/smallauth/internal/config"
+	"github.com/example/smallauth/internal/db"
+	"github.com/example/smallauth/internal/mail"
+	"github.com/example/smallauth/internal/middleware"
+	"github.com/gin-gonic/gin"
 )
 
 // @title SmallAuth API
