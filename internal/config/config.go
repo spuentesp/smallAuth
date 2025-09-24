@@ -26,6 +26,10 @@ type Config struct {
 	PasswordRequireDigit bool
 	PasswordRequireSymbol bool
 	PasswordRecoveryTokenTTL int // in seconds
+	RateLimitMaxRequests int
+	RateLimitWindowSeconds int
+	BruteForceMaxAttempts int
+	BruteForceBlockSeconds int
 }
 
 // LoadConfig loads configuration from environment variables
@@ -50,6 +54,10 @@ func LoadConfig() *Config {
 		PasswordRequireDigit: getEnvBool("PASSWORD_REQUIRE_DIGIT", true),
 		PasswordRequireSymbol: getEnvBool("PASSWORD_REQUIRE_SYMBOL", true),
 		PasswordRecoveryTokenTTL: getEnvInt("PASSWORD_RECOVERY_TOKEN_TTL", 86400), // default 24h
+		RateLimitMaxRequests: getEnvInt("RATE_LIMIT_MAX_REQUESTS", 100),
+		RateLimitWindowSeconds: getEnvInt("RATE_LIMIT_WINDOW_SECONDS", 60),
+		BruteForceMaxAttempts: getEnvInt("BRUTE_FORCE_MAX_ATTEMPTS", 5),
+		BruteForceBlockSeconds: getEnvInt("BRUTE_FORCE_BLOCK_SECONDS", 300),
 	}
 }
 
