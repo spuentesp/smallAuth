@@ -12,6 +12,7 @@ import (
 	"github.com/example/smallauth/internal/db"
 	"github.com/example/smallauth/internal/mail"
 	"github.com/example/smallauth/internal/middleware"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 )
@@ -62,13 +63,36 @@ func main() {
 		logrus.WithError(err).Fatal("Failed to set trusted proxies")
 	}
 
+	// Configure CORS
+	corsConfig := cors.Config{
+		AllowCredentials: cfg.CORSAllowCredentials,
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		MaxAge:           12 * time.Hour,
+	}
+
+	// Parse allowed origins from config
+	if cfg.CORSAllowedOrigins == "*" {
+		corsConfig.AllowAllOrigins = true
+	} else {
+		origins := strings.Split(cfg.CORSAllowedOrigins, ",")
+		trimmedOrigins := make([]string, 0, len(origins))
+		for _, origin := range origins {
+			trimmedOrigins = append(trimmedOrigins, strings.TrimSpace(origin))
+		}
+		corsConfig.AllowOrigins = trimmedOrigins
+	}
+
+	router.Use(cors.New(corsConfig))
+
 	mailer := mail.NewSMTPMailer(cfg)
 
 	// Public endpoints with rate limiting
 	router.Use(middleware.RateLimitMiddleware(cfg.RateLimitMaxRequests, time.Duration(cfg.RateLimitWindowSeconds)*time.Second))
 
 	// Public endpoints
-	router.POST("/register", api.RegisterUserHandler(conn, cfg))
+	router.POST("/register", api.RegisterUserHandler(conn, cfg, mailer))
 	router.POST("/login", middleware.BruteForceProtectionMiddleware(cfg.BruteForceMaxAttempts, time.Duration(cfg.BruteForceBlockSeconds)*time.Second), func(c *gin.Context) {
 		// Call the actual login handler
 		api.LoginHandler(conn, cfg)(c)
@@ -80,6 +104,8 @@ func main() {
 		}
 	})
 	router.POST("/token/validate", api.ValidateTokenHandler(cfg))
+	router.POST("/token/refresh", api.RefreshTokenHandler(conn, cfg))
+	router.POST("/user/verify-email", api.VerifyEmailHandler(conn))
 	router.POST("/user/recover", api.RecoverPasswordHandler(conn, cfg, mailer))
 	router.GET("/health", api.HealthHandler())
 
@@ -91,6 +117,8 @@ func main() {
 	authGroup.PUT("/user", api.UpdateUserHandler(conn))
 	authGroup.PUT("/user/password", api.ChangePasswordHandler(conn, cfg))
 	authGroup.PUT("/user/auto-redirect", api.SetAutoRedirectHandler(conn))
+	authGroup.POST("/user/resend-verification", api.ResendVerificationEmailHandler(conn, cfg, mailer))
+	authGroup.POST("/auth/logout", api.LogoutHandler(conn, cfg))
 
 	// Admin endpoints (add RBAC middleware for permission checks)
 	adminGroup := authGroup.Group("/admin")

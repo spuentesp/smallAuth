@@ -10,6 +10,7 @@ type User struct {
 	Username        string         `gorm:"uniqueIndex;not null"`
 	PasswordHash    string         `gorm:"not null"`
 	Email           string         `gorm:"uniqueIndex;not null"`
+	EmailVerified   bool           `gorm:"default:false;not null"`
 	RecoveryEmail   string         `gorm:"not null"`
 	AutoRedirectURL string         `gorm:"type:text"`
 	CreatedAt       time.Time

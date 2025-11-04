@@ -31,6 +31,10 @@ type Config struct {
 	BruteForceMaxAttempts    int
 	BruteForceBlockSeconds   int
 	FrontendBaseURL          string
+	JWTExpirationHours       int    // JWT access token expiration in hours
+	RefreshTokenExpirationDays int  // Refresh token expiration in days
+	CORSAllowedOrigins       string // Comma-separated list of allowed origins
+	CORSAllowCredentials     bool   // Allow credentials in CORS
 }
 
 // LoadConfig loads configuration from environment variables
@@ -60,6 +64,10 @@ func LoadConfig() *Config {
 		BruteForceMaxAttempts:    getEnvInt("BRUTE_FORCE_MAX_ATTEMPTS", 5),
 		BruteForceBlockSeconds:   getEnvInt("BRUTE_FORCE_BLOCK_SECONDS", 300),
 		FrontendBaseURL:          os.Getenv("FRONTEND_BASE_URL"),
+		JWTExpirationHours:       getEnvInt("JWT_EXPIRATION_HOURS", 24),        // default 24 hours
+		RefreshTokenExpirationDays: getEnvInt("REFRESH_TOKEN_EXPIRATION_DAYS", 30), // default 30 days
+		CORSAllowedOrigins:       getEnvString("CORS_ALLOWED_ORIGINS", "*"),    // default allow all
+		CORSAllowCredentials:     getEnvBool("CORS_ALLOW_CREDENTIALS", true),
 	}
 }
 
@@ -81,6 +89,13 @@ func getEnvBool(key string, defaultVal bool) bool {
 		if val == "false" || val == "0" {
 			return false
 		}
+	}
+	return defaultVal
+}
+
+func getEnvString(key string, defaultVal string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
 	}
 	return defaultVal
 }

@@ -18,8 +18,9 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	Token       string `json:"token"`
-	RedirectURL string `json:"redirect_url,omitempty"`
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
+	RedirectURL  string `json:"redirect_url,omitempty"`
 }
 
 func LoginHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
@@ -43,7 +44,18 @@ func LoginHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
 			return
 		}
-		resp := LoginResponse{Token: token}
+
+		// Generate refresh token
+		refreshToken, err := auth.CreateRefreshToken(db, user.ID, cfg.RefreshTokenExpirationDays)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate refresh token"})
+			return
+		}
+
+		resp := LoginResponse{
+			Token:        token,
+			RefreshToken: refreshToken.Token,
+		}
 		if user.AutoRedirectURL != "" {
 			resp.RedirectURL = user.AutoRedirectURL
 		}
@@ -52,11 +64,12 @@ func LoginHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 }
 
 func generateJWT(user *models.User, cfg *config.Config) (string, error) {
+	expirationTime := time.Duration(cfg.JWTExpirationHours) * time.Hour
 	claims := jwt.MapClaims{
 		"sub":      user.ID,
 		"username": user.Username,
 		"email":    user.Email,
-		"exp":      time.Now().Add(24 * time.Hour).Unix(),
+		"exp":      time.Now().Add(expirationTime).Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(cfg.JWTSecret))
@@ -89,5 +102,104 @@ func ValidateTokenHandler(cfg *config.Config) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, ValidateTokenResponse{Valid: true, Claims: claims})
+	}
+}
+
+// Refresh token endpoint
+
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+type RefreshTokenResponse struct {
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+func RefreshTokenHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req RefreshTokenRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+			return
+		}
+
+		// Validate the refresh token
+		refreshToken, err := auth.ValidateRefreshToken(db, req.RefreshToken)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired refresh token"})
+			return
+		}
+
+		// Load the user
+		var user models.User
+		if err := db.Where("id = ?", refreshToken.UserID).First(&user).Error; err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+
+		// Generate new access token
+		newAccessToken, err := generateJWT(&user, cfg)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+			return
+		}
+
+		// Generate new refresh token and revoke the old one
+		auth.RevokeRefreshToken(db, req.RefreshToken)
+		newRefreshToken, err := auth.CreateRefreshToken(db, user.ID, cfg.RefreshTokenExpirationDays)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate refresh token"})
+			return
+		}
+
+		c.JSON(http.StatusOK, RefreshTokenResponse{
+			Token:        newAccessToken,
+			RefreshToken: newRefreshToken.Token,
+		})
+	}
+}
+
+// Logout endpoint
+
+func LogoutHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "missing token"})
+			return
+		}
+
+		// Extract token without Bearer prefix
+		const bearerPrefix = "Bearer "
+		if len(authHeader) < len(bearerPrefix) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token format"})
+			return
+		}
+		tokenStr := authHeader[len(bearerPrefix):]
+
+		// Extract expiration time from token
+		expiresAt, err := auth.ExtractExpirationFromToken(tokenStr, cfg.JWTSecret)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token"})
+			return
+		}
+
+		// Add token to blacklist
+		if err := auth.BlacklistToken(db, tokenStr, expiresAt); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to logout"})
+			return
+		}
+
+		// Get user from context to revoke refresh tokens
+		userInterface, exists := c.Get("user")
+		if exists {
+			if user, ok := userInterface.(*models.User); ok {
+				// Revoke all refresh tokens for this user
+				auth.RevokeAllUserRefreshTokens(db, user.ID)
+			}
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
 	}
 }

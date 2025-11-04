@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/example/smallauth/internal/auth"
 	"github.com/example/smallauth/internal/config"
 	"github.com/example/smallauth/internal/models"
 	"github.com/example/smallauth/internal/rbac"
@@ -115,12 +116,31 @@ func logRequest(c *gin.Context, status int, msg string) {
 // AuthMiddleware validates JWT and loads user into context
 func AuthMiddleware(cfg *config.Config, db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		tokenStr := c.GetHeader("Authorization")
-		if tokenStr == "" {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
 			logRequest(c, http.StatusUnauthorized, "missing token")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
 			return
 		}
+
+		// Check for Bearer prefix
+		const bearerPrefix = "Bearer "
+		if len(authHeader) < len(bearerPrefix) || authHeader[:len(bearerPrefix)] != bearerPrefix {
+			logRequest(c, http.StatusUnauthorized, "invalid token format, must use Bearer scheme")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token format"})
+			return
+		}
+
+		// Extract token without Bearer prefix
+		tokenStr := authHeader[len(bearerPrefix):]
+
+		// Check if token is blacklisted
+		if auth.IsTokenBlacklisted(db, tokenStr) {
+			logRequest(c, http.StatusUnauthorized, "token has been revoked")
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token has been revoked"})
+			return
+		}
+
 		claims := jwt.MapClaims{}
 		_, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (interface{}, error) {
 			return []byte(cfg.JWTSecret), nil

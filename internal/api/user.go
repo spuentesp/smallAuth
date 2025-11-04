@@ -48,7 +48,7 @@ func logAPI(c *gin.Context, status int, msg string, fields logrus.Fields) {
 // @Failure 400 {object} map[string]string
 // @Failure 500 {object} map[string]string
 // @Router /register [post]
-func RegisterUserHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
+func RegisterUserHandler(db *gorm.DB, cfg *config.Config, mailer mail.Mailer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req RegisterUserRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -85,8 +85,17 @@ func RegisterUserHandler(db *gorm.DB, cfg *config.Config) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create user"})
 			return
 		}
+
+		// Send email verification
+		if err := auth.SendVerificationEmail(db, cfg, mailer, user); err != nil {
+			logrus.WithError(err).Error("Failed to send verification email")
+			// Don't fail registration if email sending fails
+		}
+
 		logAPI(c, http.StatusCreated, "user registered", logrus.Fields{"username": req.Username, "user_id": user.ID})
-		c.JSON(http.StatusCreated, gin.H{"message": "user registered"})
+		c.JSON(http.StatusCreated, gin.H{
+			"message": "user registered successfully, please check your email to verify your account",
+		})
 	}
 }
 

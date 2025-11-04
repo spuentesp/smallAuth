@@ -18,12 +18,14 @@ func ConnectDB(cfg *config.Config) (*gorm.DB, error) {
 // MigrateDB runs GORM auto-migrations for all models
 func MigrateDB(db *gorm.DB) error {
 	return db.AutoMigrate(
-		&config.Config{}, // not a DB model, skip
 		&models.User{},
 		&models.Role{},
 		&models.Permission{},
 		&models.UserRole{},
 		&models.RolePermission{},
 		&models.PasswordRecoveryToken{},
+		&models.RefreshToken{},
+		&models.EmailVerificationToken{},
+		&models.TokenBlacklist{},
 	)
 }
